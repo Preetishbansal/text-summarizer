@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Text Processor — CrewAI Demo</title>
+  <style>
+    :root {
+      --ink: #1b1b1f;
+      --paper: #faf9f6;
+      --accent: #2f6f4f;
+      --accent-soft: #e7f0ea;
+      --border: #d8d5cd;
+      --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 48px 20px;
+    }
+
+    .wrap {
+      max-width: 760px;
+      width: 100%;
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    .tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin: 6px 0 8px;
+      font-weight: 650;
+    }
+
+    p.sub {
+      color: #5b5a55;
+      margin: 0;
+      font-size: 15px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: inherit;
+      resize: vertical;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .char-count {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #8a8780;
+    }
+
+    button#processBtn {
+      margin-top: 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 12px 22px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    button#processBtn:hover {
+      opacity: 0.88;
+    }
+
+    button#processBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 14px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      min-height: 18px;
+    }
+
+    #resultBox {
+      margin-top: 24px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      white-space: pre-wrap;
+      font-size: 14.5px;
+      line-height: 1.55;
+      display: none;
+    }
+
+    #resultBox.visible {
+      display: block;
+    }
+
+    .error-box {
+      margin-top: 16px;
+      background: #fdecea;
+      border: 1px solid #f3c2bd;
+      color: #9a3324;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-box.visible {
+      display: block;
+    }
+
+    footer {
+      margin-top: 36px;
+      font-size: 12px;
+      color: #9a988f;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="tag">CrewAI </div>
+      <h1>Text Processor</h1>
+      <p class="sub">Paste text below. A CrewAI agent will call a stats tool, then summarize it.</p>
+    </header>
+
+    <textarea id="inputText" placeholder="Paste an article, email, or any block of text here…"></textarea>
+    <div class="row">
+      <span class="char-count" id="charCount">0 characters</span>
+    </div>
+
+    <button id="processBtn">Process Text</button>
+    <div id="status"></div>
+
+    <div class="error-box" id="errorBox"></div>
+    <div class="result-box" id="resultBox"></div>
+
+    <footer>Agent: Text Analyst &nbsp;·&nbsp; Tool: Text Statistics Analyzer &nbsp;·&nbsp; LLM: Groq (Llama 3.3 70B)
+    </footer>
+  </div>
+
+  <script>
+    const inputText = document.getElementById('inputText');
+    const charCount = document.getElementById('charCount');
+    const processBtn = document.getElementById('processBtn');
+    const status = document.getElementById('status');
+    const errorBox = document.getElementById('errorBox');
+    const resultBox = document.getElementById('resultBox');
+
+    inputText.addEventListener('input', () => {
+      charCount.textContent = `${inputText.value.length} characters`;
+    });
+
+    processBtn.addEventListener('click', async () => {
+      const text = inputText.value.trim();
+      errorBox.classList.remove('visible');
+      resultBox.classList.remove('visible');
+
+      if (!text) {
+        errorBox.textContent = 'Please enter some text first.';
+        errorBox.classList.add('visible');
+        return;
+      }
+
+      processBtn.disabled = true;
+      status.textContent = 'Agent is working… (this can take 10-30s)';
+
+      try {
+        const res = await fetch('/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Unknown error');
+        }
+
+        resultBox.textContent = data.result;
+        resultBox.classList.add('visible');
+        status.textContent = 'Done.';
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.add('visible');
+        status.textContent = '';
+      } finally {
+        processBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+
+</html>
